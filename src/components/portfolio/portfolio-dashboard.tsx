@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useWalletUi } from '@wallet-ui/react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,16 +28,11 @@ export function PortfolioDashboard() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>('')
 
-  useEffect(() => {
-    if (account) {
-      fetchPortfolioData()
-    }
-  })
-
-  const fetchPortfolioData = async () => {
+  const fetchPortfolioData = useCallback(async () => {
     if (!account) return
 
     setIsLoading(true)
+    setError('') // Clear previous errors
     try {
       const mockData = {
         balance: 2500000000,
@@ -47,26 +42,40 @@ export function PortfolioDashboard() {
         ],
       }
 
-      portfolio.balance = mockData.balance
-      portfolio.tokens = mockData.tokens
-      setPortfolio(portfolio)
-
-      const solBalance = mockData.balance / 1000000
-    } catch (err) {
-      setError('Error')
+      // Use setPortfolio with a new object, not mutation
+      setPortfolio({
+        balance: mockData.balance / 1000000, // Convert lamports to SOL
+        tokens: mockData.tokens,
+        totalValue: calculateTotalValueFromTokens(mockData.tokens),
+      })
+    } catch {
+      setError('Error fetching portfolio data')
     }
     setIsLoading(false)
-  }
+  }, [account])
 
-  const calculateTotalValue = () => {
-    const now = new Date()
-    return portfolio.tokens.reduce((total, token) => {
-      return total + parseFloat(token.amount)
+  useEffect(() => {
+    if (account) {
+      fetchPortfolioData()
+    }
+  }, [account, fetchPortfolioData])
+
+  // Util to calculate total value from tokens (mock: just sum amounts, real: use price API)
+  const calculateTotalValueFromTokens = (tokens: TokenInfo[]) => {
+    // For mock, just sum USDC and USDT as $1 per token
+    return tokens.reduce((total, token) => {
+      const amount = parseFloat(token.amount) / Math.pow(10, token.decimals)
+      return total + amount
     }, 0)
   }
 
+  const calculateTotalValue = () => {
+    // Use portfolio.tokens and sum as $1 per token (mock)
+    return calculateTotalValueFromTokens(portfolio.tokens)
+  }
+
   const formatBalance = (balance: number) => {
-    return balance.toFixed(2)
+    return balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   if (!account) {
@@ -86,7 +95,7 @@ export function PortfolioDashboard() {
 
   return (
     <div className="p-2 max-w-none overflow-x-hidden">
-      <h1 className="text-5xl font-bold mb-2 whitespace-nowrap overflow-hidden">
+      <h1 className="text-5xl font-bold mb-2 break-words overflow-visible">
         My Portfolio Dashboard for Cryptocurrency Assets
       </h1>
 
@@ -94,8 +103,8 @@ export function PortfolioDashboard() {
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-xs">{error}</div>
       )}
 
-      <div className="flex flex-row gap-2 overflow-x-auto min-w-max">
-        <Card className="min-w-80 flex-shrink-0">
+      <div className="flex flex-col gap-4 sm:flex-row sm:gap-2 overflow-x-auto min-w-0 w-full">
+        <Card className="w-full sm:min-w-80 sm:w-auto flex-shrink-0">
           <CardHeader>
             <CardTitle className="text-xl whitespace-nowrap">SOL Balance Information</CardTitle>
           </CardHeader>
@@ -111,7 +120,7 @@ export function PortfolioDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="min-w-96 flex-shrink-0">
+        <Card className="w-full sm:min-w-96 sm:w-auto flex-shrink-0">
           <CardHeader>
             <CardTitle className="text-xl whitespace-nowrap">Token Holdings & Assets</CardTitle>
           </CardHeader>
@@ -121,12 +130,15 @@ export function PortfolioDashboard() {
             ) : (
               <div className="space-y-3">
                 {portfolio.tokens.map((token, index) => (
-                  <div key={index} className="flex justify-between items-center border-b pb-2">
+                  <div
+                    key={index}
+                    className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-2"
+                  >
                     <div>
                       <span className="text-lg font-medium">{token.symbol || 'Unknown Token'}</span>
-                      <p className="text-sm text-gray-600 font-mono">{token.mint}</p>
+                      <p className="text-sm text-gray-600 font-mono break-all">{token.mint}</p>
                     </div>
-                    <span className="text-lg font-mono whitespace-nowrap">{token.amount} tokens</span>
+                    <span className="text-lg font-mono whitespace-nowrap mt-2 sm:mt-0">{token.amount} tokens</span>
                   </div>
                 ))}
               </div>
@@ -134,7 +146,7 @@ export function PortfolioDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="min-w-72 flex-shrink-0">
+        <Card className="w-full sm:min-w-72 sm:w-auto flex-shrink-0">
           <CardHeader>
             <CardTitle className="text-xl whitespace-nowrap">Total Portfolio Value</CardTitle>
           </CardHeader>
